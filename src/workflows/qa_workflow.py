@@ -3,7 +3,10 @@ from openai import OpenAI
 
 from config import OPENAI_API_KEY, LLM_MODEL, EMBEDDING_MODEL
 from ..processors.embedder import Embedder
-from ..storage.vector_store import SimpleVectorStore
+from typing import Callable, List
+import weaviate
+
+from src.storage.vector_store import WeaviateVectorStore
 
 
 class QAWorkflow:
@@ -23,3 +26,18 @@ class QAWorkflow:
             max_output_tokens=500,
         )
         return response.output[0].content[0].text.strip()
+      
+def create_vector_store(
+    url: str,
+    index_name: str = "Document",
+    embedding: Callable[[str], List[float]] | None = None,
+) -> WeaviateVectorStore:
+    """Initialise a :class:`WeaviateVectorStore` for the workflow."""
+    client = weaviate.Client(url)
+    return WeaviateVectorStore(client, index_name=index_name, embedding=embedding)
+
+
+def answer_query(store: WeaviateVectorStore, query: str) -> List[str]:
+    """Retrieve relevant documents for ``query`` using the vector store."""
+    results = store.similarity_search(query)
+    return [r["text"] for r in results]
