@@ -1,3 +1,12 @@
 weaviate-client>=4.6.0
-langchain>=0.1.0
 openai>=1.0.0
+langchain
+langgraph
+pdfplumber
+PyPDF2
+Pillow
+chromadb
+fastapi
+uvicorn
+pytest
+numpy
