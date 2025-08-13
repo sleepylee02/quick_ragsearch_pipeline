@@ -4,23 +4,23 @@ os.environ["OPENAI_API_KEY"] = "test"
 from src.main import LectureProcessor
 
 
-class DummyResponse:
+class DummyLLMResponse:
     def __init__(self, text: str):
-        self.output = [type('obj', (object,), {'content': [type('c', (object,), {'text': text})()]})()]
+        self.content = text
 
 
 def fake_embed(texts):
     return [[float(len(t))] for t in texts]
 
 
-def fake_response(*args, **kwargs):
-    return DummyResponse("answer")
+def fake_llm(*args, **kwargs):
+    return DummyLLMResponse("answer")
 
 
 def test_document_and_qa_workflow():
     processor = LectureProcessor()
     with patch('src.processors.embedder.Embedder.embed', side_effect=fake_embed), \
-         patch.object(processor.qa_workflow.client.responses, 'create', side_effect=fake_response):
+         patch('src.workflows.qa_workflow.ChatOpenAI.invoke', side_effect=fake_llm):
         processor.process_document("examples/sample_pdfs/sample.pdf")
         answer = processor.ask_question("What does the document say?")
         assert answer == "answer"
