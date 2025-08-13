@@ -8,7 +8,6 @@ README's architecture description.
 
 import weaviate
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
-
 import numpy as np
 
 
@@ -133,7 +132,6 @@ class SimpleVectorStore:
             scores.append((text, score))
         scores.sort(key=lambda x: x[1], reverse=True)
         return scores[:k]
-
 
 def get_vector_store(
     embed_fn: Callable[[List[str]], List[List[float]]]

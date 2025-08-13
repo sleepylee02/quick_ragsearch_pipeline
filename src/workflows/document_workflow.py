@@ -4,6 +4,8 @@ from typing import Dict, Union
 
 from langgraph.graph import END, StateGraph
 
+from langgraph.graph import END, StateGraph
+
 from ..processors.pdf_processor import PDFProcessor
 from ..processors.image_processor import ImageProcessor
 from ..processors.text_processor import TextProcessor
@@ -19,6 +21,7 @@ class DocumentWorkflow:
         store: Union[SimpleVectorStore, WeaviateVectorStore],
         embedder: Embedder | None = None,
     ) -> None:
+
         self.pdf_processor = PDFProcessor()
         self.image_processor = ImageProcessor()
         self.text_processor = TextProcessor()
