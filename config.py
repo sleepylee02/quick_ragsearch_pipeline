@@ -12,3 +12,7 @@ MAX_TOKENS = 4000
 
 CHROMA_PERSIST_DIR = "./chroma_db"
 COLLECTION_NAME = "lecture_documents"
+
+# Vector store settings
+WEAVIATE_URL = os.getenv("WEAVIATE_URL", "http://localhost:8080")
+WEAVIATE_API_KEY = os.getenv("WEAVIATE_API_KEY")

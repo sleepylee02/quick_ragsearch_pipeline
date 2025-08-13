@@ -1,12 +1,12 @@
 """Question answering workflow using LangChain and LangGraph."""
 
-from typing import Dict
+from typing import Dict, Union
 
 from langgraph.graph import END, StateGraph
 
 from config import OPENAI_API_KEY, LLM_MODEL
 from ..processors.embedder import Embedder
-from ..storage.vector_store import SimpleVectorStore
+from ..storage.vector_store import SimpleVectorStore, WeaviateVectorStore
 
 # As with the embeddings, try to import the ChatOpenAI wrapper from the modern
 # package name but fall back to the legacy location for compatibility.
@@ -19,9 +19,13 @@ except Exception:  # pragma: no cover
 class QAWorkflow:
     """Simple retrieval-augmented question answering workflow."""
 
-    def __init__(self, store: SimpleVectorStore) -> None:
+    def __init__(
+        self,
+        store: Union[SimpleVectorStore, WeaviateVectorStore],
+        embedder: Embedder | None = None,
+    ) -> None:
         self.store = store
-        self.embedder = Embedder()
+        self.embedder = embedder or Embedder()
         self.llm = ChatOpenAI(model=LLM_MODEL, openai_api_key=OPENAI_API_KEY)
 
         workflow = StateGraph(dict)
@@ -34,9 +38,13 @@ class QAWorkflow:
 
     # ------------------------------------------------------------------
     def _retrieve(self, state: Dict) -> Dict:
-        q_emb = self.embedder.embed([state["question"]])[0]
-        results = self.store.similarity_search(q_emb, k=4)
-        state["context"] = "\n".join(text for text, _ in results)
+        if isinstance(self.store, SimpleVectorStore):
+            q_emb = self.embedder.embed([state["question"]])[0]
+            results = self.store.similarity_search(q_emb, k=4)
+            state["context"] = "\n".join(text for text, _ in results)
+        else:
+            results = self.store.similarity_search(state["question"], k=4)
+            state["context"] = "\n".join(r.get("text", "") for r in results)
         return state
 
     # ------------------------------------------------------------------

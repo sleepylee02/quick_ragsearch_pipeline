@@ -7,8 +7,7 @@ README's architecture description.
 """
 
 import weaviate
-from typing import Any, Callable, Dict, List, Optional, Tuple
-
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import numpy as np
 
 
@@ -49,14 +48,19 @@ class WeaviateVectorStore:
     def add_texts(
         self,
         texts: List[str],
+        embeddings: Optional[List[List[float]]] = None,
         metadatas: Optional[List[Dict[str, Any]]] = None,
     ) -> None:
         """Add a batch of texts with optional metadata to the store."""
+
         metadatas = metadatas or [{} for _ in texts]
         with self.client.batch as batch:
             batch.batch_size = 100
-            for text, metadata in zip(texts, metadatas):
-                vector = self.embedding(text) if self.embedding else None
+            for i, (text, metadata) in enumerate(zip(texts, metadatas)):
+                if embeddings is not None:
+                    vector = embeddings[i]
+                else:
+                    vector = self.embedding(text) if self.embedding else None
                 obj = {self.text_key: text, **metadata}
                 batch.add_data_object(obj, self.index_name, vector=vector)
 
@@ -128,3 +132,31 @@ class SimpleVectorStore:
             scores.append((text, score))
         scores.sort(key=lambda x: x[1], reverse=True)
         return scores[:k]
+
+def get_vector_store(
+    embed_fn: Callable[[List[str]], List[List[float]]]
+) -> Union[WeaviateVectorStore, SimpleVectorStore]:
+    """Instantiate a vector store, preferring Weaviate if available.
+
+    The function tries to create a ``WeaviateVectorStore`` using configuration
+    values from :mod:`config`.  If the connection fails for any reason the
+    function falls back to the in-memory :class:`SimpleVectorStore` so that the
+    rest of the system remains usable.
+    """
+
+    from config import COLLECTION_NAME, WEAVIATE_API_KEY, WEAVIATE_URL
+
+    try:  # pragma: no cover - requires external service
+        auth = (
+            weaviate.AuthApiKey(api_key=WEAVIATE_API_KEY)
+            if WEAVIATE_API_KEY
+            else None
+        )
+        client = weaviate.Client(url=WEAVIATE_URL, auth_client_secret=auth, timeout_config=(2, 2))
+        return WeaviateVectorStore(
+            client,
+            index_name=COLLECTION_NAME,
+            embedding=lambda text: embed_fn([text])[0],
+        )
+    except Exception:
+        return SimpleVectorStore()
