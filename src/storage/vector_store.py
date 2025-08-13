@@ -1,5 +1,15 @@
+"""Vector store abstractions.
+
+The project aims to support both a simple in-memory store for testing and a
+Weaviate-backed implementation for production.  Only the in-memory store is
+used in the tests, but the Weaviate wrapper remains for parity with the
+README's architecture description.
+"""
+
 import weaviate
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
+
+import numpy as np
 
 
 class WeaviateVectorStore:
@@ -81,3 +91,40 @@ class WeaviateVectorStore:
                     doc[key] = value
             documents.append(doc)
         return documents
+
+
+class SimpleVectorStore:
+    """A minimal in-memory vector store used for tests and examples.
+
+    The store keeps a list of texts alongside their corresponding embedding
+    vectors.  Similarity search is performed using cosine similarity.
+    """
+
+    def __init__(self) -> None:
+        self.texts: List[str] = []
+        self.embeddings: List[List[float]] = []
+
+    # ------------------------------------------------------------------
+    def add_texts(self, texts: List[str], embeddings: List[List[float]]) -> None:
+        """Add texts with precomputed embeddings to the store."""
+
+        self.texts.extend(texts)
+        self.embeddings.extend(embeddings)
+
+    # ------------------------------------------------------------------
+    def similarity_search(
+        self, query_embedding: List[float], k: int = 4
+    ) -> List[Tuple[str, float]]:
+        """Return the ``k`` most similar texts for ``query_embedding``."""
+
+        if not self.embeddings:
+            return []
+
+        q = np.array(query_embedding)
+        scores: List[Tuple[str, float]] = []
+        for text, emb in zip(self.texts, self.embeddings):
+            e = np.array(emb)
+            score = float(np.dot(q, e) / (np.linalg.norm(q) * np.linalg.norm(e) + 1e-10))
+            scores.append((text, score))
+        scores.sort(key=lambda x: x[1], reverse=True)
+        return scores[:k]

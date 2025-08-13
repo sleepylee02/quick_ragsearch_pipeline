@@ -1,43 +1,57 @@
-from typing import List
-from openai import OpenAI
+"""Question answering workflow using LangChain and LangGraph."""
 
-from config import OPENAI_API_KEY, LLM_MODEL, EMBEDDING_MODEL
+from typing import Dict
+
+from langgraph.graph import END, StateGraph
+
+from config import OPENAI_API_KEY, LLM_MODEL
 from ..processors.embedder import Embedder
-from typing import Callable, List
-import weaviate
+from ..storage.vector_store import SimpleVectorStore
 
-from src.storage.vector_store import WeaviateVectorStore
+# As with the embeddings, try to import the ChatOpenAI wrapper from the modern
+# package name but fall back to the legacy location for compatibility.
+try:  # pragma: no cover - exercised in tests via patching
+    from langchain_openai import ChatOpenAI
+except Exception:  # pragma: no cover
+    from langchain.chat_models import ChatOpenAI  # type: ignore
 
 
 class QAWorkflow:
+    """Simple retrieval-augmented question answering workflow."""
+
     def __init__(self, store: SimpleVectorStore) -> None:
         self.store = store
         self.embedder = Embedder()
-        self.client = OpenAI(api_key=OPENAI_API_KEY)
+        self.llm = ChatOpenAI(model=LLM_MODEL, openai_api_key=OPENAI_API_KEY)
 
-    def ask(self, question: str) -> str:
-        q_emb = self.embedder.embed([question])[0]
+        workflow = StateGraph(dict)
+        workflow.add_node("retrieve", self._retrieve)
+        workflow.add_node("generate", self._generate)
+        workflow.add_edge("retrieve", "generate")
+        workflow.add_edge("generate", END)
+        workflow.set_entry_point("retrieve")
+        self.graph = workflow.compile()
+
+    # ------------------------------------------------------------------
+    def _retrieve(self, state: Dict) -> Dict:
+        q_emb = self.embedder.embed([state["question"]])[0]
         results = self.store.similarity_search(q_emb, k=4)
-        context = "\n".join(text for text, _ in results)
-        prompt = f"Answer the question based on the context below.\nContext:\n{context}\n\nQuestion: {question}"
-        response = self.client.responses.create(
-            model=LLM_MODEL,
-            input=prompt,
-            max_output_tokens=500,
+        state["context"] = "\n".join(text for text, _ in results)
+        return state
+
+    # ------------------------------------------------------------------
+    def _generate(self, state: Dict) -> Dict:
+        prompt = (
+            "Answer the question based on the context below.\nContext:\n"
+            f"{state['context']}\n\nQuestion: {state['question']}"
         )
-        return response.output[0].content[0].text.strip()
-      
-def create_vector_store(
-    url: str,
-    index_name: str = "Document",
-    embedding: Callable[[str], List[float]] | None = None,
-) -> WeaviateVectorStore:
-    """Initialise a :class:`WeaviateVectorStore` for the workflow."""
-    client = weaviate.Client(url)
-    return WeaviateVectorStore(client, index_name=index_name, embedding=embedding)
+        response = self.llm.invoke(prompt)
+        state["answer"] = getattr(response, "content", str(response))
+        return state
 
+    # ------------------------------------------------------------------
+    def ask(self, question: str) -> str:
+        """Answer ``question`` using retrieved context."""
 
-def answer_query(store: WeaviateVectorStore, query: str) -> List[str]:
-    """Retrieve relevant documents for ``query`` using the vector store."""
-    results = store.similarity_search(query)
-    return [r["text"] for r in results]
+        final_state = self.graph.invoke({"question": question})
+        return final_state["answer"]
