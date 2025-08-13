@@ -29,7 +29,7 @@ graph TD
     D --> G[Text Chunking]
     F --> G
     G --> H[OpenAI Embeddings]
-    H --> I[Chroma Vector Store]
+    H --> I[Weaviate Vector Store]
     I --> J[RAG Setup Complete]
     J --> K[User Query]
     K --> L[Vector Search]
@@ -51,7 +51,7 @@ graph TD
 ### 3. Embedding & Storage
 - Chunk text into semantic segments
 - Generate embeddings using OpenAI's text-embedding-3-large
-- Store in weviate vector database with metadata
+- Store in Weaviate vector database with metadata
 
 ### 4. Q&A System
 - Process user queries
@@ -80,7 +80,7 @@ graph TD
 │   │
 │   ├── storage/
 │   │   ├── __init__.py
-│   │   └── vector_store.py     # Chroma integration
+│   │   └── vector_store.py     # Weaviate integration
 │   │
 │   ├── workflows/
 │   │   ├── __init__.py
@@ -146,10 +146,10 @@ class TextProcessor:
 
 ### Vector Store
 ```python
-# Simple Chroma integration
+# Simple Weaviate integration
 class VectorStore:
     def add_documents(self, chunks, embeddings, metadata):
-        # Store in Chroma with OpenAI embeddings
+        # Store in Weaviate with OpenAI embeddings
         # Include rich metadata for filtering
 ```
 
@@ -204,7 +204,8 @@ CHUNK_OVERLAP = 200
 MAX_TOKENS = 4000
 
 # Vector store settings
-CHROMA_PERSIST_DIR = "./chroma_db"
+WEAVIATE_URL = os.getenv("WEAVIATE_URL", "http://localhost:8080")
+WEAVIATE_API_KEY = os.getenv("WEAVIATE_API_KEY")
 COLLECTION_NAME = "lecture_documents"
 ```
 
@@ -245,7 +246,7 @@ answer = processor.ask_question("Compare the approaches discussed in all lecture
 - [x] Basic PDF processing with OCR
 - [ ] Image extraction and GPT-4V description
 - [ ] Text chunking and embedding with OpenAI
-- [ ] Chroma vector store integration
+- [ ] Weaviate vector store integration
 - [ ] LangGraph workflow orchestration
 - [ ] Basic Q&A functionality
 
@@ -266,7 +267,7 @@ answer = processor.ask_question("Compare the approaches discussed in all lecture
 
 - **AI Models**: OpenAI (GPT-4, GPT-4V, text-embedding-3-large)
 - **Orchestration**: LangChain, LangGraph
-- **Vector DB**: Chroma
+- **Vector DB**: Weaviate
 - **PDF Processing**: pdfplumber, PyPDF2
 - **Image Processing**: Pillow, OpenCV
 - **API**: FastAPI (optional)
