@@ -1,0 +1,25 @@
+from typing import List
+from openai import OpenAI
+
+from config import OPENAI_API_KEY, LLM_MODEL, EMBEDDING_MODEL
+from ..processors.embedder import Embedder
+from ..storage.vector_store import SimpleVectorStore
+
+
+class QAWorkflow:
+    def __init__(self, store: SimpleVectorStore) -> None:
+        self.store = store
+        self.embedder = Embedder()
+        self.client = OpenAI(api_key=OPENAI_API_KEY)
+
+    def ask(self, question: str) -> str:
+        q_emb = self.embedder.embed([question])[0]
+        results = self.store.similarity_search(q_emb, k=4)
+        context = "\n".join(text for text, _ in results)
+        prompt = f"Answer the question based on the context below.\nContext:\n{context}\n\nQuestion: {question}"
+        response = self.client.responses.create(
+            model=LLM_MODEL,
+            input=prompt,
+            max_output_tokens=500,
+        )
+        return response.output[0].content[0].text.strip()

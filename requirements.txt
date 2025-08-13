@@ -1,0 +1,11 @@
+openai>=1.0.0
+langchain
+langgraph
+pdfplumber
+PyPDF2
+Pillow
+chromadb
+fastapi
+uvicorn
+pytest
+numpy
