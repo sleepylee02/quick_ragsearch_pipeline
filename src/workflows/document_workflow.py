@@ -1,4 +1,8 @@
+"""LangGraph-powered document processing workflow."""
+
 from typing import Dict
+
+from langgraph.graph import END, StateGraph
 
 from ..processors.pdf_processor import PDFProcessor
 from ..processors.image_processor import ImageProcessor
@@ -8,6 +12,8 @@ from ..storage.vector_store import SimpleVectorStore
 
 
 class DocumentWorkflow:
+    """Process a PDF and populate the vector store."""
+
     def __init__(self, store: SimpleVectorStore) -> None:
         self.pdf_processor = PDFProcessor()
         self.image_processor = ImageProcessor()
@@ -15,12 +21,41 @@ class DocumentWorkflow:
         self.embedder = Embedder()
         self.store = store
 
-    def run(self, pdf_path: str) -> Dict[str, int]:
-        text, images = self.pdf_processor.extract(pdf_path)
-        image_descriptions = self.image_processor.describe(images) if images else []
-        chunks = self.text_processor.process(text)
-        combined = chunks + image_descriptions
+        workflow = StateGraph(dict)
+        workflow.add_node("extract", self._extract)
+        workflow.add_node("prepare", self._prepare)
+        workflow.add_node("embed_store", self._embed_store)
+        workflow.add_edge("extract", "prepare")
+        workflow.add_edge("prepare", "embed_store")
+        workflow.add_edge("embed_store", END)
+        workflow.set_entry_point("extract")
+        self.graph = workflow.compile()
+
+    # ------------------------------------------------------------------
+    def _extract(self, state: Dict) -> Dict:
+        text, images = self.pdf_processor.extract(state["pdf_path"])
+        state.update({"text": text, "images": images})
+        return state
+
+    # ------------------------------------------------------------------
+    def _prepare(self, state: Dict) -> Dict:
+        chunks = self.text_processor.process(state["text"])
+        descriptions = self.image_processor.describe(state["images"]) if state["images"] else []
+        state.update({"chunks": chunks, "descriptions": descriptions})
+        return state
+
+    # ------------------------------------------------------------------
+    def _embed_store(self, state: Dict) -> Dict:
+        combined = state["chunks"] + state["descriptions"]
         if combined:
             embeddings = self.embedder.embed(combined)
             self.store.add_texts(combined, embeddings)
-        return {"chunks": len(chunks), "images": len(images)}
+        state["result"] = {"chunks": len(state["chunks"]), "images": len(state["images"])}
+        return state
+
+    # ------------------------------------------------------------------
+    def run(self, pdf_path: str) -> Dict[str, int]:
+        """Execute the workflow for ``pdf_path``."""
+
+        final_state = self.graph.invoke({"pdf_path": pdf_path})
+        return final_state["result"]
